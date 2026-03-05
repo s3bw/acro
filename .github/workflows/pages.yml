@@ -1,0 +1,56 @@
+name: Generate Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['.acro']
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate HTML pages
+        run: |
+          mkdir -p docs
+
+          # Start index page
+          cat > docs/index.html <<'HEADER'
+          <!DOCTYPE html>
+          <html><head><meta charset="utf-8"><title>Acronyms</title>
+          <style>body{font-family:system-ui;max-width:600px;margin:2rem auto;padding:0 1rem}
+          table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px;text-align:left}
+          a{color:#0969da}</style></head><body><h1>Acronyms</h1><table><tr><th>Acronym</th><th>Meaning</th></tr>
+          HEADER
+
+          # Generate per-acronym pages and index rows
+          while IFS='=' read -r key value; do
+            [ -z "$key" ] && continue
+            # Index row
+            echo "<tr><td><a href=\"${key}.html\">${key}</a></td><td>${value}</td></tr>" >> docs/index.html
+            # Individual page
+            cat > "docs/${key}.html" <<PAGE
+          <!DOCTYPE html>
+          <html><head><meta charset="utf-8"><title>${key}</title>
+          <style>body{font-family:system-ui;max-width:600px;margin:2rem auto;padding:0 1rem}
+          a{color:#0969da}</style></head><body>
+          <p><a href="index.html">&larr; All acronyms</a></p>
+          <h1>${key}</h1><p>${value}</p></body></html>
+          PAGE
+          done < .acro
+
+          # Close index
+          echo "</table></body></html>" >> docs/index.html
+
+      - name: Commit and push docs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/
+          git diff --cached --quiet && exit 0
+          git commit -m "Generate pages"
+          git push
